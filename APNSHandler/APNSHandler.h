@@ -8,20 +8,19 @@
 #import <UIKit/UIKit.h>
 
 @class APNSHandler;
-
-@protocol APNSHandler_InactiveDelegate <NSObject>//
-//处理收到的通知
-- (void)APNSHandler:(APNSHandler*)manager handleRemoteNotification:(NSDictionary *)userInfo;//
-@property(nonatomic) BOOL isReadyForHandleNotification;//是否可以处理收到的通知
-@end
-
-@protocol APNSHandler_ActiveDelegate <APNSHandler_InactiveDelegate>
+@protocol APNSHandlerDelegate <NSObject>
 
 -(NSSet *)UserNotificationCategories;//获取各种category
 //注册成功
-- (void)APNSHandler:(APNSHandler*)manager didRegisterForRemoteNotificationsWithDeviceToken:(NSData*)deviceToken;
+- (void)APNSHandler:(APNSHandler*)handler didRegisterForRemoteNotificationsWithDeviceToken:(NSData*)deviceToken;
 //注册失败
-- (void)APNSHandler:(APNSHandler*)manager didFailToRegisterForRemoteNotificationsWithError:(NSError *)error;
+- (void)APNSHandler:(APNSHandler*)handler didFailToRegisterForRemoteNotificationsWithError:(NSError *)error;
+
+//处理收到的通知
+- (void)APNSHandler:(APNSHandler*)handler handleRemoteNotification:(NSDictionary *)userInfo;//
+- (void)APNSHandler:(APNSHandler*)handler handleActionWithIdentifier:(NSString *)identifier forRemoteNotification:(NSDictionary *)userInfo;
+@property(nonatomic) BOOL isReadyForHandleNotification;//是否可以处理收到的通知
+
 @end
 
 
@@ -30,9 +29,8 @@
 + (APNSHandler *)instance;
 
 @property (nonatomic,readonly) BOOL _isRegistedNotification;//系统是否注册过通知
-@property(nonatomic,readonly) int _currentSupportedNotificationType;//当前系统设置支持的类型
-@property (nonatomic, assign) id<APNSHandler_InactiveDelegate> _inactiveDelegate;
-@property (nonatomic, assign) id<APNSHandler_ActiveDelegate> _activeDelegate;
+@property(nonatomic,readonly) int _supportedNotificationType;//当前系统设置支持的类型
+@property (nonatomic, assign) id<APNSHandlerDelegate> _delegate;
 @property(nonatomic,readonly) int _registedNotificationType;//之前注册过的类型
 
 - (void)registerForRemoteNotificationsIfNecessary:(int)newType;//注册 -->类型不同时会调用注册程序
@@ -47,4 +45,5 @@
 //
 - (void)handleApplication:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo;
 - (void)handleApplication:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))handler;
+- (void)handleApplication:(UIApplication *)application handleActionWithIdentifier:(NSString *)identifier forRemoteNotification:(NSDictionary *)userInfo completionHandler:(void(^)())completionHandler;
 @end

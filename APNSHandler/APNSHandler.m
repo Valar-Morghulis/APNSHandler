@@ -7,6 +7,9 @@
 
 #import "APNSHandler.h"
 
+#define APNSHandler_Identifier_NullValue @"APNSHandler_Null_IdentifierValue"
+#define APNSHandler_Identifier_Key @"APNSHandler_Identifier_Key"
+
 #define IS_IOS8_OR_LATER ([[[UIDevice currentDevice] systemVersion] floatValue] >= 8.0)
 
 @interface APNSHandler ()
@@ -20,13 +23,11 @@
 @implementation APNSHandler
 @synthesize _array;
 @synthesize _isRegistedNotification;
-@synthesize _inactiveDelegate = _inactiveDelegate;
-@synthesize _activeDelegate = _activeDelegate;
+@synthesize _delegate = _delegate;
 @synthesize _registedNotificationType;
 -(void)dealloc
 {
-    self._inactiveDelegate = 0;//
-    self._activeDelegate = 0;
+    self._delegate = 0;//
     [NSKeyedArchiver archiveRootObject:self._array  toFile:[self filePath]];
     self._array = 0;
     
@@ -63,9 +64,6 @@
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
         //
         self._array = [NSKeyedUnarchiver unarchiveObjectWithFile:[self filePath]];
-        
-        NSMutableArray * emptyArray = [NSMutableArray array];
-        [NSKeyedArchiver archiveRootObject:emptyArray  toFile:[self filePath]];//清空文件
         if(!self._array)
         {
             self._array = [NSMutableArray array];
@@ -80,7 +78,7 @@
 }
 -(void)set_registedNotificationType:(int)type
 {
-    [[NSUserDefaults standardUserDefaults] setObject:[NSNumber numberWithInt:_registedNotificationType] forKey:@"APNSHandler_registedNotificationType"];
+    [[NSUserDefaults standardUserDefaults] setObject:[NSNumber numberWithInt:type] forKey:@"APNSHandler_registedNotificationType"];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
@@ -95,7 +93,7 @@
         return [[UIApplication sharedApplication] enabledRemoteNotificationTypes] != UIRemoteNotificationTypeNone;
     }
 }
--(int)_currentSupportedNotificationType
+-(int)_supportedNotificationType
 {
     if(IS_IOS8_OR_LATER)
     {
@@ -107,34 +105,20 @@
     }
 }
 
-- (void)set_inactiveDelegate:(id<APNSHandler_InactiveDelegate>)inactiveDelegate
+- (void)set_delegate:(id<APNSHandlerDelegate>)delegate
 {
-    if(_inactiveDelegate)
+    if(_delegate)
     {
-        [(id)_inactiveDelegate removeObserver:self forKeyPath:@"isReadyForHandleNotification"];
+        [(id)_delegate removeObserver:self forKeyPath:@"isReadyForHandleNotification"];
     }
-    _inactiveDelegate = inactiveDelegate;
-    if(_inactiveDelegate)
+    _delegate = delegate;
+    if(_delegate)
     {
-        [(id)_inactiveDelegate addObserver:self forKeyPath:@"isReadyForHandleNotification" options:NSKeyValueObservingOptionNew context:0];
+        [(id)_delegate addObserver:self forKeyPath:@"isReadyForHandleNotification" options:NSKeyValueObservingOptionNew context:0];
     }
     [self distributeNotifications];
 }
 
-- (void)set_activeDelegate:(id<APNSHandler_ActiveDelegate>)activeDelegate
-{
-    if(_activeDelegate)
-    {
-        [(id)_activeDelegate removeObserver:self forKeyPath:@"isReadyForHandleNotification"];
-    }
-    _activeDelegate = activeDelegate;
-    if(_activeDelegate)
-    {
-        [(id)_activeDelegate addObserver:self forKeyPath:@"isReadyForHandleNotification" options:NSKeyValueObservingOptionNew context:0];
-    }
-    [self distributeNotifications];
-}
-//
 -(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context
 {
     if([keyPath isEqualToString:@"isReadyForHandleNotification"])
@@ -150,29 +134,27 @@
 }
 -(void)distributeNotifications
 {
-    if([self._array count] > 0)
+    if(self._delegate && [self._array count] > 0)
     {
         NSDictionary * info = [self._array objectAtIndex:0];
-        BOOL handled = FALSE;
-        if(self._activeDelegate)
+        if([self._delegate isReadyForHandleNotification])
         {
-            if([self._activeDelegate isReadyForHandleNotification])
-            {
-                [self._activeDelegate APNSHandler:self handleRemoteNotification:info];
-                handled = TRUE;
-            }
-        }
-        else if (self._inactiveDelegate)
-        {
-            if([self._inactiveDelegate isReadyForHandleNotification])
-            {
-                [self._inactiveDelegate APNSHandler:self handleRemoteNotification:info];
-                handled = TRUE;
-            }
-        }//else
-        if(handled)
-        {
+             [info retain];
             [self._array removeObjectAtIndex:0];
+            NSString * identifier = [info objectForKey:APNSHandler_Identifier_Key];
+            if(identifier)
+            {
+                if([identifier isEqualToString:APNSHandler_Identifier_NullValue])
+                    identifier = nil;
+                NSMutableDictionary * dic = [NSMutableDictionary dictionaryWithDictionary:info];
+                [dic removeObjectForKey:APNSHandler_Identifier_Key];
+                [self._delegate APNSHandler:self handleActionWithIdentifier:identifier forRemoteNotification:dic];
+            }
+            else
+            {
+                [self._delegate APNSHandler:self handleRemoteNotification:info];
+            }
+            [info release];
         }
     }//fi
 }
@@ -186,9 +168,9 @@
     {
         if(IS_IOS8_OR_LATER)
         {
-            if(self._activeDelegate)
+            if(self._delegate)
             {
-                UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:newType categories:[self._activeDelegate UserNotificationCategories]];
+                UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:newType categories:[self._delegate UserNotificationCategories]];
                 [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
             }
         }
@@ -206,7 +188,11 @@
     NSDictionary * dic = launchOptions[UIApplicationLaunchOptionsRemoteNotificationKey];
     if(dic)
     {
-        [self._array addObject:dic];
+        [dic retain];
+        [self._array removeObject:dic];
+        [self._array insertObject:dic atIndex:0];//移到首位
+        [dic release];
+        
         [self distributeNotifications];
     }
 }
@@ -219,16 +205,16 @@
 - (void)handleApplication:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken
 {
     self._registedNotificationType = _newType;
-    if(self._activeDelegate)
+    if(self._delegate)
     {
-        [self._activeDelegate APNSHandler:self didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
+        [self._delegate APNSHandler:self didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
     }
 }
 - (void)handleApplication:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error
 {
-    if(self._activeDelegate)
+    if(self._delegate)
     {
-        [self._activeDelegate APNSHandler:self didFailToRegisterForRemoteNotificationsWithError:error];
+        [self._delegate APNSHandler:self didFailToRegisterForRemoteNotificationsWithError:error];
     }
 }
 //
@@ -243,10 +229,25 @@
     [self distributeNotifications];
     handler(UIBackgroundFetchResultNewData);
 }
-
+- (void)handleApplication:(UIApplication *)application handleActionWithIdentifier:(NSString *)identifier forRemoteNotification:(NSDictionary *)userInfo completionHandler:(void(^)())completionHandler
+{
+    NSMutableDictionary  * dic = [NSMutableDictionary dictionaryWithDictionary:userInfo];
+    NSString * identifierValue = identifier ? identifier : APNSHandler_Identifier_NullValue;
+    [dic setObject:identifierValue forKey:APNSHandler_Identifier_Key];
+    
+    [self._array removeObject:userInfo];
+    [self._array insertObject:dic atIndex:0];//移到首位
+    [self distributeNotifications];
+     completionHandler();
+}
 - (void)applicationDidBecomeActive:(NSNotification *)notification
 {
-    [self registerForRemoteNotificationsIfNecessary:_newType];
+    if(!self._isRegistedNotification)
+        [self registerForRemoteNotificationsIfNecessary:_newType];
+    else
+    {
+        [self distributeNotifications];
+    }
 }
 
 @end
