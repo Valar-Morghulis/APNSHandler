@@ -116,7 +116,7 @@
     {
         [(id)_delegate addObserver:self forKeyPath:@"isReadyForHandleNotification" options:NSKeyValueObservingOptionNew context:0];
     }
-    [self distributeNotifications];
+    [self dispatchNotifications];
 }
 
 -(void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context
@@ -125,14 +125,14 @@
     {
         BOOL newValue = [[change objectForKey:NSKeyValueChangeNewKey] boolValue];
         if(newValue)
-            [self distributeNotifications];
+            [self dispatchNotifications];
     }
     else
     {
         [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
     }
 }
--(void)distributeNotifications
+-(void)dispatchNotifications
 {
     if(self._delegate && [self._array count] > 0)
     {
@@ -193,7 +193,7 @@
         [self._array insertObject:dic atIndex:0];//移到首位
         [dic release];
         
-        [self distributeNotifications];
+        [self dispatchNotifications];
     }
 }
 
@@ -221,12 +221,12 @@
 - (void)handleApplication:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
 {
     [self._array addObject:userInfo];
-    [self distributeNotifications];
+    [self dispatchNotifications];
 }
 - (void)handleApplication:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))handler
 {
     [self._array addObject:userInfo];
-    [self distributeNotifications];
+    [self dispatchNotifications];
     handler(UIBackgroundFetchResultNewData);
 }
 - (void)handleApplication:(UIApplication *)application handleActionWithIdentifier:(NSString *)identifier forRemoteNotification:(NSDictionary *)userInfo completionHandler:(void(^)())completionHandler
@@ -237,7 +237,7 @@
     
     [self._array removeObject:userInfo];
     [self._array insertObject:dic atIndex:0];//移到首位
-    [self distributeNotifications];
+    [self dispatchNotifications];
      completionHandler();
 }
 - (void)applicationDidBecomeActive:(NSNotification *)notification
@@ -246,7 +246,7 @@
         [self registerForRemoteNotificationsIfNecessary:_newType];
     else
     {
-        [self distributeNotifications];
+        [self dispatchNotifications];
     }
 }
 
