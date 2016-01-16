@@ -31,6 +31,7 @@
 @property (nonatomic,readonly) BOOL _isRegistedNotification;//系统是否注册过通知
 @property(nonatomic,readonly) int _supportedNotificationType;//当前系统设置支持的类型
 @property (nonatomic, assign) id<APNSHandlerDelegate> _delegate;
+@property(nonatomic,readonly) NSString * _deviceToken;//
 @property(nonatomic,readonly) int _registedNotificationType;//之前注册过的类型
 
 - (void)registerForRemoteNotificationsIfNecessary:(int)newType;//注册 -->类型不同时会调用注册程序

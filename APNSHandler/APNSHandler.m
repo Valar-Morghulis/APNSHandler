@@ -18,6 +18,8 @@
 }
 @property(nonatomic,retain) NSMutableArray * _array;
 @property(nonatomic,readwrite) int _registedNotificationType;//之前注册过的类型
+@property(nonatomic,readwrite) NSString * _deviceToken;//
+
 @end
 
 @implementation APNSHandler
@@ -25,6 +27,7 @@
 @synthesize _isRegistedNotification;
 @synthesize _delegate = _delegate;
 @synthesize _registedNotificationType;
+@synthesize _deviceToken = _deviceToken;
 -(void)dealloc
 {
     self._delegate = 0;//
@@ -81,16 +84,24 @@
     [[NSUserDefaults standardUserDefaults] setObject:[NSNumber numberWithInt:type] forKey:@"APNSHandler_registedNotificationType"];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
-
+-(NSString *)_deviceToken
+{
+    return [[NSUserDefaults standardUserDefaults]  objectForKey:@"APNSHandler_deviceToken"];
+}
+-(void)set_deviceToken:(NSString *)deviceToken
+{
+    [[NSUserDefaults standardUserDefaults] setObject:deviceToken forKey:@"APNSHandler_deviceToken"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
 - (BOOL)_isRegistedNotification
 {
     if(IS_IOS8_OR_LATER)
     {
-        return [[UIApplication sharedApplication] isRegisteredForRemoteNotifications];
+        return [[UIApplication sharedApplication] isRegisteredForRemoteNotifications] && self._deviceToken;
     }
     else
     {
-        return [[UIApplication sharedApplication] enabledRemoteNotificationTypes] != UIRemoteNotificationTypeNone;
+        return [[UIApplication sharedApplication] enabledRemoteNotificationTypes] != UIRemoteNotificationTypeNone && self._deviceToken;
     }
 }
 -(int)_supportedNotificationType
@@ -204,9 +215,14 @@
 
 - (void)handleApplication:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken
 {
-    self._registedNotificationType = _newType;
     if(self._delegate)
     {
+        NSString *token = [deviceToken description];
+        token = [token stringByReplacingOccurrencesOfString:@"<" withString:@""];
+        token = [token stringByReplacingOccurrencesOfString:@">" withString:@""];
+        token = [token stringByReplacingOccurrencesOfString:@" " withString:@""];
+        self._deviceToken = token;
+        self._registedNotificationType = _newType;//只有在有delegeate的情况下才改写。防止下次注册失败。
         [self._delegate APNSHandler:self didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
     }
 }
